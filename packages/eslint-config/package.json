@@ -1,0 +1,6 @@
+{
+  "name": "@peerflow/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "files": ["base.js", "next.js", "nest.js"]
+}
