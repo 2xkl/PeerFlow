@@ -4,11 +4,11 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: `http://${process.env.API_HOST || 'dev'}:${process.env.API_PORT || '4000'}/api/:path*`,
+        destination: `http://${process.env.API_HOST || 'localhost'}:${process.env.API_PORT || '4000'}/api/:path*`,
       },
       {
         source: '/ws/:path*',
-        destination: `http://${process.env.API_HOST || 'dev'}:${process.env.API_PORT || '4000'}/ws/:path*`,
+        destination: `http://${process.env.API_HOST || 'localhost'}:${process.env.API_PORT || '4000'}/ws/:path*`,
       },
     ];
   },

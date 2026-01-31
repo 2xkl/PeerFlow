@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TorrentsModule } from './modules/torrents/torrents.module';
 import { StreamingModule } from './modules/streaming/streaming.module';
@@ -11,20 +11,18 @@ import { HealthModule } from './modules/health/health.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get('DB_HOST', 'localhost'),
-        port: config.get<number>('DB_PORT', 5432),
-        username: config.get('DB_USER', 'peerflow'),
-        password: config.get('DB_PASSWORD', 'peerflow_secret'),
-        database: config.get('DB_NAME', 'peerflow'),
-        autoLoadEntities: true,
-        synchronize: config.get('NODE_ENV') === 'development',
-        logging: config.get('NODE_ENV') === 'development',
-      }),
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      username: process.env.DB_USER || 'peerflow',
+      password: process.env.DB_PASSWORD || 'peerflow_secret',
+      database: process.env.DB_NAME || 'peerflow',
+      autoLoadEntities: true,
+      synchronize: process.env.NODE_ENV === 'development',
+      logging: process.env.NODE_ENV === 'development',
+      retryAttempts: 10,
+      retryDelay: 3000,
     }),
     StorageModule,
     TorrentsModule,

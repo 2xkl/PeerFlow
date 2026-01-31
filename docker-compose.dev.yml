@@ -1,19 +1,42 @@
 services:
-  dev:
+  web:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    command: sh -c "pnpm --filter @peerflow/shared build && pnpm --filter @peerflow/web dev"
     volumes:
       - ./apps/web/src:/app/apps/web/src
       - ./apps/web/public:/app/apps/web/public
       - ./apps/web/next.config.mjs:/app/apps/web/next.config.mjs
       - ./apps/web/tailwind.config.ts:/app/apps/web/tailwind.config.ts
+      - ./packages/shared/src:/app/packages/shared/src
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - API_HOST=api
+      - API_PORT=4000
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      api:
+        condition: service_started
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: sh -c "pnpm --filter @peerflow/shared build && pnpm --filter @peerflow/api dev"
+    volumes:
       - ./apps/api/src:/app/apps/api/src
       - ./packages/shared/src:/app/packages/shared/src
       - downloads:/data/downloads
       - transcodes:/data/transcodes
     ports:
-      - "3000:3000"
       - "4000:4000"
     environment:
       - DB_HOST=postgres
@@ -28,7 +51,6 @@ services:
       - DOWNLOAD_PATH=/data/downloads
       - TRANSCODE_PATH=/data/transcodes
       - API_PORT=4000
-      - WEB_PORT=3000
       - NODE_ENV=development
     depends_on:
       postgres:
@@ -39,8 +61,6 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-    stdin_open: true
-    tty: true
 
   postgres:
     image: postgres:16-alpine

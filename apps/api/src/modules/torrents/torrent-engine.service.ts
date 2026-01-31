@@ -53,7 +53,10 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
-    const WebTorrent = (await import('webtorrent')).default;
+    // Use Function to preserve native import() — prevents tsc from converting to require()
+    const importDynamic = new Function('modulePath', 'return import(modulePath)');
+    const mod = await importDynamic('webtorrent');
+    const WebTorrent = mod.default || mod;
     this.client = new WebTorrent({
       maxConns: 50,
     }) as unknown as WTorrentClient;

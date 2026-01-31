@@ -25,12 +25,12 @@ export class TorrentFileEntity {
   @Column({ name: 'size_bytes', type: 'bigint', default: 0 })
   sizeBytes: number;
 
-  @Column({ name: 'mime_type', nullable: true })
+  @Column({ name: 'mime_type', type: 'varchar', nullable: true })
   mimeType: string | null;
 
   @Column({ name: 'is_video', default: false })
   isVideo: boolean;
 
-  @Column({ name: 'storage_key', nullable: true })
+  @Column({ name: 'storage_key', type: 'varchar', nullable: true })
   storageKey: string | null;
 }

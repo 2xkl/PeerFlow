@@ -4,4 +4,7 @@ dist
 .turbo
 data
 .git
+.env
+.env.local
+.claude
 *.md

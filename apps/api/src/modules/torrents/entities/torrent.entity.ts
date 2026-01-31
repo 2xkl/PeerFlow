@@ -42,7 +42,7 @@ export class TorrentEntity {
   @Column({ name: 'downloaded_bytes', type: 'bigint', default: 0 })
   downloadedBytes: number;
 
-  @Column({ name: 'save_path', nullable: true })
+  @Column({ name: 'save_path', type: 'varchar', nullable: true })
   savePath: string | null;
 
   @OneToMany(() => TorrentFileEntity, (file) => file.torrent, { cascade: true })
