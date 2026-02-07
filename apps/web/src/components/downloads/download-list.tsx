@@ -90,9 +90,9 @@ export function DownloadList({ torrents, onPause, onResume, onRemove }: Download
                 </Button>
               </div>
             </div>
-            <Progress value={torrent.progress} className="mt-3" />
+            <Progress value={torrent.progress ?? 0} className="mt-3" />
             <div className="mt-1 text-xs text-muted-foreground text-right">
-              {torrent.progress.toFixed(1)}%
+              {(torrent.progress ?? 0).toFixed(1)}%
             </div>
           </div>
         );

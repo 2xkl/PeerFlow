@@ -21,6 +21,7 @@ export class TorrentsService {
   ) {}
 
   async onModuleInit() {
+    await this.engine.waitForReady();
     await this.restoreActiveTorrents();
   }
 

@@ -48,7 +48,12 @@ export function useDownloads() {
   }, [fetchTorrents]);
 
   useEffect(() => {
-    const socket: Socket = io('/ws/torrents', {
+    // WebSocket needs to connect directly to API (Next.js rewrites don't support WS upgrade)
+    const wsUrl = typeof window !== 'undefined'
+      ? `${window.location.protocol}//${window.location.hostname}:4000`
+      : 'http://localhost:4000';
+
+    const socket: Socket = io(`${wsUrl}/ws/torrents`, {
       transports: ['websocket'],
     });
 

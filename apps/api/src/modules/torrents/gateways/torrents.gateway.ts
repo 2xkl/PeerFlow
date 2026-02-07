@@ -29,6 +29,7 @@ export class TorrentsGateway
     this.interval = setInterval(() => {
       const states = this.engine.getAllStates();
       if (states.length > 0) {
+        this.logger.debug(`Broadcasting ${states.length} torrent states`);
         this.server.emit('torrent:progress', states);
       }
     }, TORRENT_PROGRESS_INTERVAL_MS);

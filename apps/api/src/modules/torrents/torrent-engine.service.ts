@@ -16,6 +16,13 @@ export interface TorrentState {
   files: { name: string; path: string; length: number }[];
 }
 
+interface WTorrentFile {
+  name: string;
+  path: string;
+  length: number;
+  select(): void;
+}
+
 interface WTorrent {
   infoHash: string;
   name: string;
@@ -27,7 +34,7 @@ interface WTorrent {
   length: number;
   done: boolean;
   paused: boolean;
-  files: { name: string; path: string; length: number; select(): void }[];
+  files: WTorrentFile[];
   pause(): void;
   resume(): void;
   destroy(cb?: (err?: Error) => void): void;
@@ -38,6 +45,7 @@ interface WTorrentClient {
   torrents: WTorrent[];
   add(torrentId: string | Buffer, opts?: any): WTorrent;
   get(torrentId: string): WTorrent | null;
+  remove(torrentId: string, cb?: (err?: Error) => void): void;
   destroy(cb?: (err?: Error) => void): void;
   on(event: string, listener: (...args: any[]) => void): this;
 }
@@ -47,9 +55,18 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
   private client: WTorrentClient;
   private readonly logger = new Logger(TorrentEngineService.name);
   private readonly downloadPath: string;
+  private readyPromise: Promise<void>;
+  private resolveReady: () => void;
 
   constructor(private config: ConfigService) {
     this.downloadPath = config.get('DOWNLOAD_PATH', '/data/downloads');
+    this.readyPromise = new Promise((resolve) => {
+      this.resolveReady = resolve;
+    });
+  }
+
+  async waitForReady(): Promise<void> {
+    return this.readyPromise;
   }
 
   async onModuleInit() {
@@ -58,7 +75,17 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
     const mod = await importDynamic('webtorrent');
     const WebTorrent = mod.default || mod;
     this.client = new WebTorrent({
-      maxConns: 50,
+      maxConns: 100,
+      tracker: {
+        announce: [],
+        rtcConfig: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+          ],
+        },
+      },
+      userAgent: 'qBittorrent/4.6.2',
     }) as unknown as WTorrentClient;
 
     this.client.on('error', (err: Error) => {
@@ -66,6 +93,7 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.logger.log('WebTorrent engine initialized');
+    this.resolveReady();
   }
 
   onModuleDestroy() {
@@ -77,9 +105,13 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
 
   async addMagnet(magnetUri: string): Promise<TorrentState> {
     return new Promise((resolve, reject) => {
+      this.logger.log(`Adding magnet: ${magnetUri.substring(0, 60)}...`);
+
       const torrent = this.client.add(magnetUri, {
         path: this.downloadPath,
       });
+
+      this.logger.log(`Torrent created with infoHash: ${torrent.infoHash}`);
 
       const timeout = setTimeout(() => {
         reject(new Error('Torrent metadata timeout'));
@@ -87,13 +119,20 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
 
       torrent.on('metadata', () => {
         clearTimeout(timeout);
+        this.logger.log(`Metadata received for: ${torrent.name} (${torrent.infoHash})`);
+        this.logger.log(`Active torrents in engine: ${this.client.torrents.length}`);
         this.enableSequentialForVideo(torrent);
         resolve(this.getTorrentState(torrent) as TorrentState);
       });
 
       torrent.on('error', (err: Error) => {
         clearTimeout(timeout);
+        this.logger.error(`Torrent error: ${err.message}`);
         reject(err);
+      });
+
+      torrent.on('done', () => {
+        this.logger.log(`Torrent completed: ${torrent.name}`);
       });
     });
   }
@@ -122,23 +161,43 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   removeTorrent(infoHash: string): void {
-    const torrent = this.client.get(infoHash);
-    if (torrent) {
-      torrent.destroy();
+    if (this.client) {
+      const torrent = this.client.torrents.find((t: WTorrent) => t.infoHash === infoHash);
+      if (torrent) {
+        try {
+          this.client.remove(infoHash, (err) => {
+            if (err) {
+              this.logger.error(`Failed to remove torrent ${infoHash}: ${err.message}`);
+            } else {
+              this.logger.log(`Removed torrent from engine: ${infoHash}`);
+            }
+          });
+        } catch (err: any) {
+          this.logger.warn(`Error removing torrent ${infoHash}: ${err.message}`);
+        }
+      } else {
+        this.logger.log(`Torrent ${infoHash} not active in engine, skipping removal`);
+      }
     }
   }
 
   pauseTorrent(infoHash: string): void {
-    const torrent = this.client.get(infoHash);
+    const torrent = this.client.torrents.find((t: WTorrent) => t.infoHash === infoHash);
     if (torrent) {
       torrent.pause();
+      this.logger.log(`Paused torrent: ${infoHash}`);
+    } else {
+      this.logger.warn(`Cannot pause - torrent not found: ${infoHash}`);
     }
   }
 
   resumeTorrent(infoHash: string): void {
-    const torrent = this.client.get(infoHash);
+    const torrent = this.client.torrents.find((t: WTorrent) => t.infoHash === infoHash);
     if (torrent) {
       torrent.resume();
+      this.logger.log(`Resumed torrent: ${infoHash}`);
+    } else {
+      this.logger.warn(`Cannot resume - torrent not found: ${infoHash}`);
     }
   }
 
@@ -160,7 +219,7 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
       downloaded: torrent.downloaded,
       size: torrent.length || 0,
       done: torrent.done,
-      files: torrent.files.map((f) => ({
+      files: (torrent.files || []).map((f) => ({
         name: f.name,
         path: f.path,
         length: f.length,
@@ -175,7 +234,7 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
       .filter(Boolean) as TorrentState[];
   }
 
-  getFilePath(infoHash: string, filePath: string): string {
+  getFilePath(_infoHash: string, filePath: string): string {
     return path.join(this.downloadPath, filePath);
   }
 
@@ -184,7 +243,7 @@ export class TorrentEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private enableSequentialForVideo(torrent: WTorrent): void {
-    const videoFile = torrent.files.find((f) => isVideoFile(f.name));
+    const videoFile = torrent.files.find((f: WTorrentFile) => isVideoFile(f.name));
     if (videoFile) {
       videoFile.select();
       this.logger.log(`Sequential download enabled for: ${videoFile.name}`);
